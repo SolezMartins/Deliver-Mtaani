@@ -1,0 +1,57 @@
+{% comment %}Deliver Mtaani — customer-facing location capture. Customers remain Shopify customers and do not need a Deliver Mtaani account. This snippet stores structured delivery details and optional browser GPS as Shopify cart attributes. TomTom validation can happen later in the merchant operations workspace.{% endcomment %}
+<div id="deliver-mtaani-location" style="border:1px solid #f0dfe8;border-radius:14px;padding:18px;margin:20px 0;font-family:inherit">
+  <strong style="font-size:16px">Delivery location</strong>
+  <p style="color:#786873;font-size:12px">Give the rider enough detail to find you. A GPS pin is optional and can improve delivery accuracy.</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+    <input id="dm-area" placeholder="Area / town">
+    <input id="dm-estate" placeholder="Estate / neighbourhood">
+    <input id="dm-building" placeholder="Building / apartment">
+    <input id="dm-floor" placeholder="Floor / unit">
+  </div>
+  <input id="dm-landmark" placeholder="Landmark" style="width:100%;padding:11px;border:1px solid #ead9e2;border-radius:9px;margin-top:8px">
+  <textarea id="dm-instructions" placeholder="Delivery instructions" style="width:100%;padding:11px;border:1px solid #ead9e2;border-radius:9px;margin-top:8px"></textarea>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+    <button id="dm-gps" type="button" style="background:#fff;color:#24151f;border:1px solid #ead9e2;border-radius:9px;padding:10px 13px;font-weight:700">Use my current location</button>
+    <button id="dm-confirm" type="button" style="background:#ec0a73;color:#fff;border:0;border-radius:9px;padding:11px 14px;font-weight:700">Confirm delivery location</button>
+  </div>
+  <span id="dm-status" style="display:block;font-size:11px;margin-top:8px;color:#786873"></span>
+</div>
+<script>
+(()=>{
+  const root=document.querySelector('#deliver-mtaani-location');
+  if(!root)return;
+  const status=root.querySelector('#dm-status');
+  let coords={lat:'',lng:''};
+  const value=id=>root.querySelector(id).value.trim();
+
+  root.querySelector('#dm-gps').onclick=()=>{
+    if(!navigator.geolocation){status.textContent='Location sharing is not supported on this device.';return;}
+    status.textContent='Requesting your location…';
+    navigator.geolocation.getCurrentPosition(
+      p=>{coords={lat:String(p.coords.latitude),lng:String(p.coords.longitude)};status.textContent='GPS location captured. Add landmarks or instructions, then confirm.';},
+      ()=>{status.textContent='Could not access GPS. You can still provide the address details manually.';},
+      {enableHighAccuracy:true,timeout:10000,maximumAge:60000}
+    );
+  };
+
+  root.querySelector('#dm-confirm').onclick=async()=>{
+    const attrs={
+      'Delivery area':value('#dm-area'),
+      'Delivery estate':value('#dm-estate'),
+      'Delivery building':value('#dm-building'),
+      'Delivery floor / unit':value('#dm-floor'),
+      'Delivery landmark':value('#dm-landmark'),
+      'Delivery instructions':value('#dm-instructions'),
+      'Delivery latitude':coords.lat,
+      'Delivery longitude':coords.lng
+    };
+    const filtered=Object.fromEntries(Object.entries(attrs).filter(([,v])=>v));
+    if(!Object.keys(filtered).length){status.textContent='Add at least one delivery location detail before confirming.';return;}
+    try{
+      const r=await fetch('/cart/update.js',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({attributes:filtered})});
+      if(!r.ok)throw new Error('save failed');
+      status.textContent='Delivery location saved to your order.';
+    }catch{status.textContent='We could not save the location. Please try again.';}
+  };
+})();
+</script>
